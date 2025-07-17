@@ -919,7 +919,7 @@ async def handle_custom_map_score_submission(
         MIN_REPLAY_SIZE = 24
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"custom_{score.id}.osr"
+            replay_disk_file = REPLAYS_PATH / f"{score.id}2.osr"
             replay_disk_file.write_bytes(replay_data)
 
     # 更新用户统计 - 完全与官方谱面保持一致
@@ -1503,7 +1503,7 @@ async def osuSubmitModularSelector(
         MIN_REPLAY_SIZE = 24
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"{score.id}.osr"
+            replay_disk_file = REPLAYS_PATH / f"{score.id}1.osr"
             replay_disk_file.write_bytes(replay_data)
         else:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
@@ -1781,15 +1781,17 @@ async def getReplay(
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ) -> Response:
     score = await Score.from_sql(score_id)
-    if not score:
-        return Response(b"", status_code=404)
+    if score is not None:
+        file = REPLAYS_PATH / f"{score_id}1.osr"
+        if not file.exists():
+            return Response(b"", status_code=404)
+    else:
+        file = REPLAYS_PATH / f"{score_id}2.osr"
+        if not file.exists():
+            return Response(b"", status_code=404)
 
-    file = REPLAYS_PATH / f"{score_id}.osr"
-    if not file.exists():
-        return Response(b"", status_code=404)
-
-    # increment replay views for this score
-    if score.player is not None and player.id != score.player.id:
+    # increment replay views for this score (official scores only)
+    if score is not None and score.player is not None and player.id != score.player.id:
         app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
 
     return FileResponse(file)

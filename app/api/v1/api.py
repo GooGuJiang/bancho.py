@@ -698,12 +698,15 @@ async def api_get_replay(
     the player's total replay views.
     """
     # fetch replay file & make sure it exists
-    replay_file = REPLAYS_PATH / f"{score_id}.osr"
+    # try official replay first, then custom replay
+    replay_file = REPLAYS_PATH / f"{score_id}1.osr"
     if not replay_file.exists():
-        return ORJSONResponse(
-            {"status": "Replay not found."},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        replay_file = REPLAYS_PATH / f"{score_id}2.osr"
+        if not replay_file.exists():
+            return ORJSONResponse(
+                {"status": "Replay not found."},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
     # read replay frames from file
     raw_replay_data = replay_file.read_bytes()
     if not include_headers:
