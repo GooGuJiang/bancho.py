@@ -19,3 +19,6 @@ poetry.toml
 .coverage
 logging.yaml
 logs.log
+.data/*
+user_backend/*
+gu-osu-frontend/*

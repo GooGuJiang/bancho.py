@@ -116,24 +116,36 @@ class Database:
         return val
 
     async def execute(self, query: MySQLQuery, params: MySQLParams = None) -> int:
-        if isinstance(query, ClauseElement):
-            query, params = self._compile(query)
+        # print(f"Executing SQL query: {query} with params: {params}")
+        try:
+            if isinstance(query, ClauseElement):
+                query, params = self._compile(query)
 
-        with Timer() as timer:
-            rec_id = await self._database.execute(query, params)
+            with Timer() as timer:
+                rec_id = await self._database.execute(query, params)
 
-        if settings.DEBUG:
-            time_elapsed = timer.elapsed()
+            if settings.DEBUG:
+                time_elapsed = timer.elapsed()
+                log(
+                    f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
+                    extra={
+                        "query": query,
+                        "params": params,
+                        "time_elapsed": time_elapsed,
+                    },
+                )
+
+            return cast(int, rec_id)
+        except Exception as e:
             log(
-                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
+                f"Error executing SQL query: {query} {params}. Exception: {e}",
                 extra={
                     "query": query,
                     "params": params,
-                    "time_elapsed": time_elapsed,
+                    "exception": str(e),
                 },
             )
-
-        return cast(int, rec_id)
+            raise
 
     # NOTE: this accepts str since current execute_many uses are not using alchemy.
     #       alchemy does execute_many in a single query so this method will be unneeded once raw SQL is not in use.

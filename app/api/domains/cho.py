@@ -861,7 +861,7 @@ async def handle_osu_login_request(
         is_tourney_client=osu_version.stream == "tourney",
         api_key=user_info["api_key"],
     )
-
+    # print(player.avatar_url)
     data = bytearray(app.packets.protocol_version(19))
     data += app.packets.login_reply(player.id)
 
