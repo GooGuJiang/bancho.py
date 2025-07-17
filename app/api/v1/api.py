@@ -31,6 +31,7 @@ from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.repositories import users as users_repo
 from app.usecases.performance import ScoreParams
+import app.storage
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -697,15 +698,20 @@ async def api_get_replay(
     Note that this endpoint does not increment
     the player's total replay views.
     """
-    # fetch replay file & make sure it exists
-    replay_file = REPLAYS_PATH / f"{score_id}.osr"
-    if not replay_file.exists():
-        return ORJSONResponse(
-            {"status": "Replay not found."},
-            status_code=status.HTTP_404_NOT_FOUND,
+    # fetch replay from object storage
+    raw_replay_data = await app.storage.download(
+        app.settings.S3_REPLAY_BUCKET, f"{score_id}1.osr"
+    )
+    if raw_replay_data is None:
+        raw_replay_data = await app.storage.download(
+            app.settings.S3_REPLAY_BUCKET, f"{score_id}2.osr"
         )
-    # read replay frames from file
-    raw_replay_data = replay_file.read_bytes()
+        if raw_replay_data is None:
+            return ORJSONResponse(
+                {"status": "Replay not found."},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
     if not include_headers:
         return Response(
             bytes(raw_replay_data),

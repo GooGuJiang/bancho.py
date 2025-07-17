@@ -9,6 +9,7 @@ from datetime import timedelta
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
+import asyncio
 from typing import Any
 from typing import TypedDict
 
@@ -22,6 +23,7 @@ import app.utils
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
+from app import storage
 from app.repositories import maps as maps_repo
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -74,21 +76,37 @@ async def api_get_osu_file(beatmap_id: int) -> bytes:
     return response.read()
 
 
-def disk_has_expected_osu_file(
+async def disk_has_expected_osu_file(
     beatmap_id: int,
     expected_md5: str | None = None,
 ) -> bool:
     osu_file_path = BEATMAPS_PATH / f"{beatmap_id}.osu"
     file_exists = osu_file_path.exists()
-    if file_exists and expected_md5 is not None:
-        osu_file_md5 = hashlib.md5(osu_file_path.read_bytes()).hexdigest()
-        return osu_file_md5 == expected_md5
-    return file_exists
+    if file_exists:
+        if expected_md5 is not None:
+            osu_file_md5 = hashlib.md5(osu_file_path.read_bytes()).hexdigest()
+            if osu_file_md5 == expected_md5:
+                return True
+            file_exists = False
+        else:
+            return True
+
+    if not file_exists:
+        data = await storage.download(app.settings.S3_OSU_BUCKET, f"{beatmap_id}.osu")
+        if data is None:
+            return False
+        osu_file_path.write_bytes(data)
+        if expected_md5 is not None:
+            return hashlib.md5(data).hexdigest() == expected_md5
+        return True
+
+    return False
 
 
-def write_osu_file_to_disk(beatmap_id: int, data: bytes) -> None:
+async def write_osu_file_to_disk(beatmap_id: int, data: bytes) -> None:
     osu_file_path = BEATMAPS_PATH / f"{beatmap_id}.osu"
     osu_file_path.write_bytes(data)
+    await storage.upload(app.settings.S3_OSU_BUCKET, f"{beatmap_id}.osu", data)
 
 
 async def ensure_osu_file_is_available(
@@ -104,7 +122,7 @@ async def ensure_osu_file_is_available(
 
     Returns whether the file is available for use.
     """
-    if disk_has_expected_osu_file(beatmap_id, expected_md5):
+    if await disk_has_expected_osu_file(beatmap_id, expected_md5):
         return True
 
     try:
@@ -115,7 +133,7 @@ async def ensure_osu_file_is_available(
         log(f"Failed to fetch osu file for {beatmap_id}", Ansi.LRED)
         return False
 
-    write_osu_file_to_disk(beatmap_id, latest_osu_file)
+    await write_osu_file_to_disk(beatmap_id, latest_osu_file)
     return True
 
 
