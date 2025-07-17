@@ -70,5 +70,13 @@ LOG_WITH_COLORS = read_bool(os.environ["LOG_WITH_COLORS"])
 ##          you could put your server at risk.
 DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 
+# object storage
+S3_ENDPOINT = os.environ["S3_ENDPOINT"]
+S3_ACCESS_KEY = os.environ["S3_ACCESS_KEY"]
+S3_SECRET_KEY = os.environ["S3_SECRET_KEY"]
+S3_REGION = os.environ.get("S3_REGION", "us-east-1")
+S3_REPLAY_BUCKET = os.environ["S3_REPLAY_BUCKET"]
+S3_OSU_BUCKET = os.environ["S3_OSU_BUCKET"]
+
 with open("pyproject.toml", "rb") as f:
     VERSION = tomllib.load(f)["tool"]["poetry"]["version"]
