@@ -24,6 +24,7 @@ from starlette.requests import ClientDisconnect
 import app.bg_loops
 import app.settings
 import app.state
+import app.storage
 import app.utils
 from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
@@ -93,6 +94,8 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
         app.state.services.datadog.gauge("bancho.online_players", 0)  # type: ignore[no-untyped-call]
 
     app.state.services.ip_resolver = app.state.services.IPResolver()
+
+    await app.storage.ensure_folders()
 
     await app.state.services.run_sql_migrations()
 

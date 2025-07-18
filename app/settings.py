@@ -70,5 +70,14 @@ LOG_WITH_COLORS = read_bool(os.environ["LOG_WITH_COLORS"])
 ##          you could put your server at risk.
 DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 
+# object storage (Cloudflare R2)
+R2_ENDPOINT = os.environ["R2_ENDPOINT"]
+R2_ACCESS_KEY = os.environ["R2_ACCESS_KEY"]
+R2_SECRET_KEY = os.environ["R2_SECRET_KEY"]
+R2_REGION = os.environ.get("R2_REGION", "auto")
+R2_BUCKET = os.environ["R2_BUCKET"]
+R2_REPLAY_FOLDER = os.environ.get("R2_REPLAY_FOLDER", "replays")
+R2_OSU_FOLDER = os.environ.get("R2_OSU_FOLDER", "osu")
+
 with open("pyproject.toml", "rb") as f:
     VERSION = tomllib.load(f)["tool"]["poetry"]["version"]

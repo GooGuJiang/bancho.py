@@ -47,6 +47,7 @@ import app.packets
 import app.settings
 import app.state
 import app.state.services
+import app.storage
 import app.utils
 from app import encryption
 from app._typing import UNSET
@@ -920,8 +921,8 @@ async def handle_custom_map_score_submission(
         MIN_REPLAY_SIZE = 24
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"custom_{score.id}.osr"
-            replay_disk_file.write_bytes(replay_data)
+            key = f"{app.settings.R2_REPLAY_FOLDER}/{score.id}2.osr"
+            await app.storage.upload(app.settings.R2_BUCKET, key, replay_data)
 
     # 更新用户统计 - 完全与官方谱面保持一致
     if score.player.stats is None:
@@ -1504,8 +1505,8 @@ async def osuSubmitModularSelector(
         MIN_REPLAY_SIZE = 24
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"{score.id}.osr"
-            replay_disk_file.write_bytes(replay_data)
+            key = f"{app.settings.R2_REPLAY_FOLDER}/{score.id}1.osr"
+            await app.storage.upload(app.settings.R2_BUCKET, key, replay_data)
         else:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
@@ -1783,48 +1784,21 @@ async def getReplay(
 ) -> Response:
     # 首先尝试从官方成绩表中获取成绩
     score = await Score.from_sql(score_id)
-    is_custom_score = False
 
-    if not score:
-        # 如果官方成绩表中找不到，尝试从自定义成绩表中查找
-        custom_score = await custom_scores_repo.fetch_one(score_id=score_id)
-        if custom_score:
-            is_custom_score = True
-            # 为了兼容现有逻辑，我们需要创建一个临时的Score对象
-            # 但只需要player信息用于replay views统计
-            try:
-                score_player = await app.state.sessions.players.from_cache_or_sql(
-                    id=custom_score["user_id"],
-                )
-
-                # 创建一个简单的对象来保存player信息
-                class CustomScoreInfo:
-                    def __init__(self, player):
-                        self.player = player
-
-                score = CustomScoreInfo(score_player)
-            except:
-                score = None
-        else:
-            return Response(b"", status_code=404)
-
-    # 根据成绩类型确定回放文件路径
-    if is_custom_score:
-        file = REPLAYS_PATH / f"custom_{score_id}.osr"
+    if score is not None:
+        key = f"{app.settings.R2_REPLAY_FOLDER}/{score_id}1.osr"
     else:
-        file = REPLAYS_PATH / f"{score_id}.osr"
+        key = f"{app.settings.R2_REPLAY_FOLDER}/{score_id}2.osr"
 
-    if not file.exists():
+    data = await app.storage.download(app.settings.R2_BUCKET, key)
+    if data is None:
         return Response(b"", status_code=404)
 
-    # increment replay views for this score
-    if score and score.player is not None and player.id != score.player.id:
-        if not is_custom_score:
-            # 只有官方成绩才调用increment_replay_views方法
-            app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
-        # 对于自定义成绩，我们暂时不增加replay views统计，或者可以实现类似的功能
+    # increment replay views for this score (official scores only)
+    if score is not None and score.player is not None and player.id != score.player.id:
+        app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
 
-    return FileResponse(file)
+    return Response(data, media_type="application/octet-stream")
 
 
 @router.get("/web/osu-rate.php")
