@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import hashlib
 from datetime import datetime
+from datetime import timezone
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
@@ -250,7 +251,7 @@ class Score:
         s.client_time = datetime.strptime(data[14], "%y%m%d%H%M%S")
         s.client_flags = ClientFlags(data[15].count(" ") & ~4)
 
-        s.server_time = datetime.now()
+        s.server_time = datetime.now(timezone.utc)
 
         return s
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from datetime import timezone
 from typing import Any
 from typing import cast
 
@@ -95,8 +96,8 @@ async def create(
         "mode": mode,
         "creator": creator,
         "version": version,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
         **kwargs,
     }
 
@@ -177,7 +178,7 @@ async def update_statistics(
     speed_difficulty: float | None = None,
 ) -> None:
     """更新谱面统计信息"""
-    update_data: dict[str, Any] = {"updated_at": datetime.utcnow()}
+    update_data: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
 
     if star_rating is not None:
         update_data["star_rating"] = star_rating
@@ -227,7 +228,7 @@ async def update_status(map_id: int, status: str) -> None:
     update_stmt = (
         update(CustomMapsTable)
         .where(CustomMapsTable.id == map_id)
-        .values(status=status, updated_at=datetime.utcnow())
+        .values(status=status, updated_at=datetime.now(timezone.utc))
     )
     await app.state.services.database.execute(update_stmt)
 
@@ -270,7 +271,7 @@ async def create_map_file(
         file_size=file_size,
         mime_type=mime_type,
         storage_path=storage_path,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     rec_id = await app.state.services.database.execute(insert_stmt)
 

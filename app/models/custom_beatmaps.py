@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from datetime import timezone
 from typing import TypedDict
 
 from sqlalchemy import DECIMAL
@@ -36,8 +37,12 @@ class CustomMapsetsTable(Base):
     tags = Column(Text, default="")
     description = Column(Text, default="")
     status = Column(Enum("pending", "approved", "rejected", "loved"), default="pending")
-    upload_date = Column(DateTime, default=datetime.utcnow)
-    last_update = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    upload_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_update = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     osz_filename = Column(String(255), nullable=False)
     osz_hash = Column(CHAR(32), nullable=False, unique=True)
     download_count = Column(Integer, default=0)
@@ -124,8 +129,12 @@ class CustomMapsTable(Base):
     passes = Column(Integer, default=0)
 
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     __table_args__ = (
         Index("idx_custom_maps_md5", "md5", unique=True),
@@ -148,7 +157,7 @@ class CustomMapBookmarksTable(Base):
         ForeignKey("custom_mapsets.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 # 自定义谱面评分表
@@ -162,8 +171,12 @@ class CustomMapRatingsTable(Base):
         primary_key=True,
     )
     rating = Column(TINYINT, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 
 # 自定义谱面成绩表
@@ -232,7 +245,7 @@ class CustomMapFilesTable(Base):
     file_size = Column(Integer, nullable=False)
     mime_type = Column(String(100), default="")
     storage_path = Column(String(500), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_custom_map_files_map_id", "map_id"),

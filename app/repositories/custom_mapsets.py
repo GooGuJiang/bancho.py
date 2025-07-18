@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from datetime import timezone
 from typing import cast
 
 from sqlalchemy import delete
@@ -57,8 +58,8 @@ async def create(
         description=description,
         osz_filename=osz_filename,
         osz_hash=osz_hash,
-        upload_date=datetime.utcnow(),
-        last_update=datetime.utcnow(),
+        upload_date=datetime.now(timezone.utc),
+        last_update=datetime.now(timezone.utc),
     )
     rec_id = await app.state.services.database.execute(insert_stmt)
 
@@ -124,7 +125,7 @@ async def update_status(mapset_id: int, status: str) -> None:
     update_stmt = (
         update(CustomMapsetsTable)
         .where(CustomMapsetsTable.id == mapset_id)
-        .values(status=status, last_update=datetime.utcnow())
+        .values(status=status, last_update=datetime.now(timezone.utc))
     )
     await app.state.services.database.execute(update_stmt)
 
@@ -232,7 +233,7 @@ async def get_popular(
     """获取热门谱面集（基于下载量和收藏数）"""
     from datetime import timedelta
 
-    since_date = datetime.utcnow() - timedelta(days=days)
+    since_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     select_stmt = (
         select(*READ_PARAMS)

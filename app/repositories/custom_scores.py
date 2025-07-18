@@ -332,7 +332,7 @@ async def get_personal_best_score(
         SELECT cs.id, cs.{scoring_metric} AS _score,
                cs.max_combo, cs.n50, cs.n100, cs.n300,
                cs.nmiss, cs.nkatu, cs.ngeki, cs.perfect, cs.mods,
-               UNIX_TIMESTAMP(cs.play_time) as time, cs.pp, cs.acc
+               UNIX_TIMESTAMP(CONVERT_TZ(cs.play_time, @@session.time_zone, '+00:00')) as time, cs.pp, cs.acc
         FROM custom_scores cs
         WHERE cs.map_md5 = :map_md5
         AND cs.user_id = :user_id
