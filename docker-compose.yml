@@ -3,6 +3,8 @@ services:
 
   mysql:
     image: docker.1ms.run/mysql:latest
+    networks:
+      - bancho-network
     ports:
       - ${DB_PORT}:${DB_PORT}
     environment:
@@ -24,6 +26,8 @@ services:
   phpmyadmin:
     image: docker.1ms.run/phpmyadmin/phpmyadmin:latest
     restart: always
+    networks:
+      - bancho-network
     ports:
       - 8080:80  # 外部访问用 http://localhost:8080
     environment:
@@ -38,6 +42,8 @@ services:
 
   redis:
     image: docker.1ms.run/bitnami/redis:latest
+    networks:
+      - bancho-network
     ports:
        - ${REDIS_PORT}:${REDIS_PORT}
     user: root
@@ -58,59 +64,73 @@ services:
 
   ## application services
 
-  # bancho:
-  #   # we also have a public image: osuakatsuki/bancho.py:latest
-  #   image: bancho:latest
-  #   ports:
-  #     - ${APP_PORT}:${APP_PORT}
-  #   depends_on:
-  #     mysql:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_started
-  #   tty: true
-  #   init: true
-  #   volumes:
-  #     - .:/srv/root
-  #     - data:/srv/root/.data
-  #   environment:
-  #     - APP_HOST=${APP_HOST}
-  #     - APP_PORT=${APP_PORT}
-  #     - DB_USER=${DB_USER}
-  #     - DB_PASS=${DB_PASS}
-  #     - DB_NAME=${DB_NAME}
-  #     - DB_HOST=${DB_HOST}
-  #     - DB_PORT=${DB_PORT}
-  #     - REDIS_USER=${REDIS_USER}
-  #     - REDIS_PASS=${REDIS_PASS}
-  #     - REDIS_HOST=${REDIS_HOST}
-  #     - REDIS_PORT=${REDIS_PORT}
-  #     - REDIS_DB=${REDIS_DB}
-  #     - OSU_API_KEY=${OSU_API_KEY}
-  #     - MIRROR_SEARCH_ENDPOINT=${MIRROR_SEARCH_ENDPOINT}
-  #     - MIRROR_DOWNLOAD_ENDPOINT=${MIRROR_DOWNLOAD_ENDPOINT}
-  #     - DOMAIN=${DOMAIN}
-  #     - COMMAND_PREFIX=${COMMAND_PREFIX}
-  #     - SEASONAL_BGS=${SEASONAL_BGS}
-  #     - MENU_ICON_URL=${MENU_ICON_URL}
-  #     - MENU_ONCLICK_URL=${MENU_ONCLICK_URL}
-  #     - DATADOG_API_KEY=${DATADOG_API_KEY}
-  #     - DATADOG_APP_KEY=${DATADOG_APP_KEY}
-  #     - DEBUG=${DEBUG}
-  #     - REDIRECT_OSU_URLS=${REDIRECT_OSU_URLS}
-  #     - PP_CACHED_ACCS=${PP_CACHED_ACCS}
-  #     - DISALLOWED_NAMES=${DISALLOWED_NAMES}
-  #     - DISALLOWED_PASSWORDS=${DISALLOWED_PASSWORDS}
-  #     - DISALLOW_OLD_CLIENTS=${DISALLOW_OLD_CLIENTS}
-  #     - DISALLOW_INGAME_REGISTRATION=${DISALLOW_INGAME_REGISTRATION}
-  #     - DISCORD_AUDIT_LOG_WEBHOOK=${DISCORD_AUDIT_LOG_WEBHOOK}
-  #     - AUTOMATICALLY_REPORT_PROBLEMS=${AUTOMATICALLY_REPORT_PROBLEMS}
-  #     - LOG_WITH_COLORS=${LOG_WITH_COLORS}
-  #     - SSL_CERT_PATH=${SSL_CERT_PATH}
-  #     - SSL_KEY_PATH=${SSL_KEY_PATH}
-  #     - DEVELOPER_MODE=${DEVELOPER_MODE}
+  bancho:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - bancho-network
+    ports:
+      - ${APP_PORT}:${APP_PORT}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    tty: true
+    init: true
+    volumes:
+      - .:/srv/root
+      - data:/srv/root/.data
+    environment:
+      - APP_HOST=${APP_HOST}
+      - APP_PORT=${APP_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+      - DB_HOST=mysql
+      - DB_PORT=${DB_PORT}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_PASS=${REDIS_PASS}
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - OSU_API_KEY=${OSU_API_KEY}
+      - MIRROR_SEARCH_ENDPOINT=${MIRROR_SEARCH_ENDPOINT}
+      - MIRROR_DOWNLOAD_ENDPOINT=${MIRROR_DOWNLOAD_ENDPOINT}
+      - DOMAIN=${DOMAIN}
+      - COMMAND_PREFIX=${COMMAND_PREFIX}
+      - SEASONAL_BGS=${SEASONAL_BGS}
+      - MENU_ICON_URL=${MENU_ICON_URL}
+      - MENU_ONCLICK_URL=${MENU_ONCLICK_URL}
+      - DATADOG_API_KEY=${DATADOG_API_KEY}
+      - DATADOG_APP_KEY=${DATADOG_APP_KEY}
+      - DEBUG=${DEBUG}
+      - REDIRECT_OSU_URLS=${REDIRECT_OSU_URLS}
+      - PP_CACHED_ACCS=${PP_CACHED_ACCS}
+      - DISALLOWED_NAMES=${DISALLOWED_NAMES}
+      - DISALLOWED_PASSWORDS=${DISALLOWED_PASSWORDS}
+      - DISALLOW_OLD_CLIENTS=${DISALLOW_OLD_CLIENTS}
+      - DISALLOW_INGAME_REGISTRATION=${DISALLOW_INGAME_REGISTRATION}
+      - DISCORD_AUDIT_LOG_WEBHOOK=${DISCORD_AUDIT_LOG_WEBHOOK}
+      - AUTOMATICALLY_REPORT_PROBLEMS=${AUTOMATICALLY_REPORT_PROBLEMS}
+      - LOG_WITH_COLORS=${LOG_WITH_COLORS}
+      - SSL_CERT_PATH=${SSL_CERT_PATH}
+      - SSL_KEY_PATH=${SSL_KEY_PATH}
+      - DEVELOPER_MODE=${DEVELOPER_MODE}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY=${R2_ACCESS_KEY}
+      - R2_SECRET_KEY=${R2_SECRET_KEY}
+      - R2_REGION=${R2_REGION}
+      - R2_BUCKET=${R2_BUCKET}
+      - R2_REPLAY_FOLDER=${R2_REPLAY_FOLDER}
+      - R2_OSU_FOLDER=${R2_OSU_FOLDER}
 
 volumes:
   data:
   db-data:
   redis-data:
+
+networks:
+  bancho-network:
+    driver: bridge
