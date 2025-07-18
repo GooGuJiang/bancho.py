@@ -109,10 +109,16 @@ async def disk_has_expected_osu_file(
 async def write_osu_file_to_disk(beatmap_id: int, data: bytes) -> None:
     osu_file_path = BEATMAPS_PATH / f"{beatmap_id}.osu"
     osu_file_path.write_bytes(data)
+    metadata = {
+        "beatmap-id": str(beatmap_id),
+        "file-type": "beatmap",
+        "source": "osu-api",
+    }
     await storage.upload(
         app.settings.R2_BUCKET,
         f"{app.settings.R2_OSU_FOLDER}/{beatmap_id}.osu",
         data,
+        metadata=metadata,
     )
 
 

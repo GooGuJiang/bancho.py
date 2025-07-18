@@ -922,7 +922,19 @@ async def handle_custom_map_score_submission(
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
             key = f"{app.settings.R2_REPLAY_FOLDER}/{score.id}2.osr"
-            await app.storage.upload(app.settings.R2_BUCKET, key, replay_data)
+            metadata = {
+                "score-id": str(score.id),
+                "score-type": "custom",
+                "user-id": str(score.player.id),
+                "map-md5": custom_beatmap["md5"],
+                "mode": str(score.mode.value),
+            }
+            await app.storage.upload(
+                app.settings.R2_BUCKET,
+                key,
+                replay_data,
+                metadata=metadata,
+            )
 
     # 更新用户统计 - 完全与官方谱面保持一致
     if score.player.stats is None:
@@ -1506,7 +1518,20 @@ async def osuSubmitModularSelector(
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
             key = f"{app.settings.R2_REPLAY_FOLDER}/{score.id}1.osr"
-            await app.storage.upload(app.settings.R2_BUCKET, key, replay_data)
+            metadata = {
+                "score-id": str(score.id),
+                "score-type": "official",
+                "user-id": str(score.player.id),
+                "map-md5": score.bmap.md5,
+                "mode": str(score.mode.value),
+                "beatmap-id": str(score.bmap.id),
+            }
+            await app.storage.upload(
+                app.settings.R2_BUCKET,
+                key,
+                replay_data,
+                metadata=metadata,
+            )
         else:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
@@ -1782,21 +1807,38 @@ async def getReplay(
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ) -> Response:
-    # 首先尝试从官方成绩表中获取成绩
-    score = await Score.from_sql(score_id)
+    # 将成绩ID转换为字符串以检查末尾数字
+    score_id_str = str(score_id)
 
-    if score is not None:
-        key = f"{app.settings.R2_REPLAY_FOLDER}/{score_id}1.osr"
+    # 根据成绩ID末尾数字判断成绩类型和文件路径
+    if score_id_str.endswith("1"):
+        # 官方成绩：ID末尾为1，去掉末尾1得到真实ID，文件以1结尾
+        real_score_id = int(score_id_str[:-1])
+        key = f"{app.settings.R2_REPLAY_FOLDER}/{real_score_id}1.osr"
+        is_official_score = True
+    elif score_id_str.endswith("2"):
+        # 自定义成绩：ID末尾为2，去掉末尾2得到真实ID，文件以2结尾
+        real_score_id = int(score_id_str[:-1])
+        key = f"{app.settings.R2_REPLAY_FOLDER}/{real_score_id}2.osr"
+        is_official_score = False
     else:
-        key = f"{app.settings.R2_REPLAY_FOLDER}/{score_id}2.osr"
+        # 如果ID末尾不是1或2，返回404
+        return Response(b"", status_code=404)
 
     data = await app.storage.download(app.settings.R2_BUCKET, key)
     if data is None:
         return Response(b"", status_code=404)
 
-    # increment replay views for this score (official scores only)
-    if score is not None and score.player is not None and player.id != score.player.id:
-        app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
+    # 只对官方成绩增加回放观看次数
+    if is_official_score:
+        # 只有在需要增加观看次数时才查询成绩信息
+        score = await Score.from_sql(real_score_id)
+        if (
+            score is not None
+            and score.player is not None
+            and player.id != score.player.id
+        ):
+            app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
 
     return Response(data, media_type="application/octet-stream")
 
@@ -2209,10 +2251,21 @@ async def getScores(
 
             response_lines.append(
                 SCORE_LISTING_FMTSTR.format(
-                    **personal_best_score_row,
+                    id=f"{personal_best_score_row['id']}2",  # 自定义成绩ID末尾添加2
                     name=display_name,
-                    userid=player.id,
                     score=int(round(personal_best_score_row["_score"])),
+                    max_combo=personal_best_score_row["max_combo"],
+                    n50=personal_best_score_row["n50"],
+                    n100=personal_best_score_row["n100"],
+                    n300=personal_best_score_row["n300"],
+                    nmiss=personal_best_score_row["nmiss"],
+                    nkatu=personal_best_score_row["nkatu"],
+                    ngeki=personal_best_score_row["ngeki"],
+                    perfect=personal_best_score_row["perfect"],
+                    mods=personal_best_score_row["mods"],
+                    userid=player.id,
+                    rank=personal_best_score_row["rank"],
+                    time=personal_best_score_row["time"],
                     has_replay="1",
                 ),
             )
@@ -2222,10 +2275,22 @@ async def getScores(
         response_lines.extend(
             [
                 SCORE_LISTING_FMTSTR.format(
-                    **s,
+                    id=f"{s['id']}2",  # 自定义成绩ID末尾添加2
+                    name=s["name"],
                     score=int(round(s["_score"])),
-                    has_replay="1",
+                    max_combo=s["max_combo"],
+                    n50=s["n50"],
+                    n100=s["n100"],
+                    n300=s["n300"],
+                    nmiss=s["nmiss"],
+                    nkatu=s["nkatu"],
+                    ngeki=s["ngeki"],
+                    perfect=s["perfect"],
+                    mods=s["mods"],
+                    userid=s["userid"],
                     rank=idx + 1,
+                    time=s["time"],
+                    has_replay="1",
                 )
                 for idx, s in enumerate(score_rows)
             ],
@@ -2296,10 +2361,21 @@ async def getScores(
         )
         response_lines.append(
             SCORE_LISTING_FMTSTR.format(
-                **personal_best_score_row,
+                id=f"{personal_best_score_row['id']}1",  # 官方成绩ID末尾添加1
                 name=display_name,
-                userid=player.id,
                 score=int(round(personal_best_score_row["_score"])),
+                max_combo=personal_best_score_row["max_combo"],
+                n50=personal_best_score_row["n50"],
+                n100=personal_best_score_row["n100"],
+                n300=personal_best_score_row["n300"],
+                nmiss=personal_best_score_row["nmiss"],
+                nkatu=personal_best_score_row["nkatu"],
+                ngeki=personal_best_score_row["ngeki"],
+                perfect=personal_best_score_row["perfect"],
+                mods=personal_best_score_row["mods"],
+                userid=player.id,
+                rank=personal_best_score_row["rank"],
+                time=personal_best_score_row["time"],
                 has_replay="1",
             ),
         )
@@ -2309,10 +2385,22 @@ async def getScores(
     response_lines.extend(
         [
             SCORE_LISTING_FMTSTR.format(
-                **s,
+                id=f"{s['id']}1",  # 官方成绩ID末尾添加1
+                name=s["name"],
                 score=int(round(s["_score"])),
-                has_replay="1",
+                max_combo=s["max_combo"],
+                n50=s["n50"],
+                n100=s["n100"],
+                n300=s["n300"],
+                nmiss=s["nmiss"],
+                nkatu=s["nkatu"],
+                ngeki=s["ngeki"],
+                perfect=s["perfect"],
+                mods=s["mods"],
+                userid=s["userid"],
                 rank=idx + 1,
+                time=s["time"],
+                has_replay="1",
             )
             for idx, s in enumerate(score_rows)
         ],
