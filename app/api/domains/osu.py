@@ -103,7 +103,7 @@ async def get_custom_map_osu_file(map_md5: str) -> str | None:
         # TODO: 使用环境变量或配置文件来获取URL
         # print(f"Fetching osu file for map MD5: {map_md5}")
         response = await app.state.services.http_client.get(
-            f"http://localhost:10050/api/osu-files/{map_md5}",
+            f"https://a.gu-osu.gmoe.cc/api/osu-files/{map_md5}",
         )
         if response.status_code == 200:
             return response.text
@@ -786,10 +786,11 @@ async def handle_custom_map_score_submission(
     unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
     unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
     unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
+
     # print(custom_beatmap)
     try:
         assert score.player.client_details is not None
-
+        # print(client_hash_decoded, score.player.client_details.client_hash)
         if osu_version != f"{score.player.client_details.osu_version.date:%Y%m%d}":
             raise ValueError("osu! version mismatch")
 
@@ -1780,17 +1781,48 @@ async def getReplay(
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ) -> Response:
+    # 首先尝试从官方成绩表中获取成绩
     score = await Score.from_sql(score_id)
-    if not score:
-        return Response(b"", status_code=404)
+    is_custom_score = False
 
-    file = REPLAYS_PATH / f"{score_id}.osr"
+    if not score:
+        # 如果官方成绩表中找不到，尝试从自定义成绩表中查找
+        custom_score = await custom_scores_repo.fetch_one(score_id=score_id)
+        if custom_score:
+            is_custom_score = True
+            # 为了兼容现有逻辑，我们需要创建一个临时的Score对象
+            # 但只需要player信息用于replay views统计
+            try:
+                score_player = await app.state.sessions.players.from_cache_or_sql(
+                    id=custom_score["user_id"],
+                )
+
+                # 创建一个简单的对象来保存player信息
+                class CustomScoreInfo:
+                    def __init__(self, player):
+                        self.player = player
+
+                score = CustomScoreInfo(score_player)
+            except:
+                score = None
+        else:
+            return Response(b"", status_code=404)
+
+    # 根据成绩类型确定回放文件路径
+    if is_custom_score:
+        file = REPLAYS_PATH / f"custom_{score_id}.osr"
+    else:
+        file = REPLAYS_PATH / f"{score_id}.osr"
+
     if not file.exists():
         return Response(b"", status_code=404)
 
     # increment replay views for this score
-    if score.player is not None and player.id != score.player.id:
-        app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
+    if score and score.player is not None and player.id != score.player.id:
+        if not is_custom_score:
+            # 只有官方成绩才调用increment_replay_views方法
+            app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
+        # 对于自定义成绩，我们暂时不增加replay views统计，或者可以实现类似的功能
 
     return FileResponse(file)
 
@@ -1968,12 +2000,7 @@ async def get_custom_leaderboard_scores(
                cs.max_combo, cs.n50, cs.n100, cs.n300,
                cs.nmiss, cs.nkatu, cs.ngeki, cs.perfect, cs.mods,
                UNIX_TIMESTAMP(cs.play_time) as time, u.id as userid,
-               COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name,
-               (SELECT COUNT(*) + 1 FROM custom_scores cs2
-                INNER JOIN users u2 ON cs2.user_id = u2.id
-                WHERE cs2.map_md5 = cs.map_md5 AND cs2.mode = cs.mode
-                AND cs2.status = 2 AND u2.priv & 1
-                AND cs2.{scoring_metric} > cs.{scoring_metric}) as rank
+               COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name
         FROM custom_scores cs
         INNER JOIN users u ON cs.user_id = u.id
         LEFT JOIN clans c ON c.id = u.clan_id
@@ -2054,7 +2081,7 @@ async def getScores(
         f"mods {mods_arg}, leaderboard type {leaderboard_type}",
         Ansi.LCYAN,
     )"""
-
+    print(map_md5)
     if aqn_files_found:
         stacktrace = app.utils.get_appropriate_stacktrace()
         await app.state.services.log_strange_occurrence(stacktrace)
@@ -2205,6 +2232,7 @@ async def getScores(
                 if user_clan is not None
                 else player.name
             )
+
             response_lines.append(
                 SCORE_LISTING_FMTSTR.format(
                     **personal_best_score_row,
@@ -2223,12 +2251,11 @@ async def getScores(
                     **s,
                     score=int(round(s["_score"])),
                     has_replay="1",
-                    rank=s["rank"],  # 使用数据库查询计算的真实排名
+                    rank=idx + 1,
                 )
-                for s in score_rows
+                for idx, s in enumerate(score_rows)
             ],
         )
-
         return Response("\n".join(response_lines).encode())
 
     # At this point, we should have a valid bmap for official maps
@@ -2789,7 +2816,7 @@ async def get_custom_beatmap_thumbnail(beatmap_id: int) -> Response:
 
         # 代理请求到user_backend
         response = await app.state.services.http_client.get(
-            f"http://localhost:10050/custom-mapsets/thumb/{beatmap_id}l.jpg",
+            f"https://a.gu-osu.gmoe.cc/custom-mapsets/thumb/{beatmap_id}l.jpg",
         )
 
         if response.status_code == 200:
