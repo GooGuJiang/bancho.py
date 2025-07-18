@@ -18,6 +18,7 @@ from fastapi.security import HTTPBearer
 
 import app.packets
 import app.state
+import app.storage
 import app.usecases.performance
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
@@ -697,15 +698,22 @@ async def api_get_replay(
     Note that this endpoint does not increment
     the player's total replay views.
     """
-    # fetch replay file & make sure it exists
-    replay_file = REPLAYS_PATH / f"{score_id}.osr"
-    if not replay_file.exists():
-        return ORJSONResponse(
-            {"status": "Replay not found."},
-            status_code=status.HTTP_404_NOT_FOUND,
+    # fetch replay from object storage
+    raw_replay_data = await app.storage.download(
+        app.settings.R2_BUCKET,
+        f"{app.settings.R2_REPLAY_FOLDER}/{score_id}1.osr",
+    )
+    if raw_replay_data is None:
+        raw_replay_data = await app.storage.download(
+            app.settings.R2_BUCKET,
+            f"{app.settings.R2_REPLAY_FOLDER}/{score_id}2.osr",
         )
-    # read replay frames from file
-    raw_replay_data = replay_file.read_bytes()
+        if raw_replay_data is None:
+            return ORJSONResponse(
+                {"status": "Replay not found."},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
     if not include_headers:
         return Response(
             bytes(raw_replay_data),

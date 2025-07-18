@@ -47,6 +47,7 @@ import app.packets
 import app.settings
 import app.state
 import app.state.services
+import app.storage
 import app.utils
 from app import encryption
 from app._typing import UNSET
@@ -919,8 +920,8 @@ async def handle_custom_map_score_submission(
         MIN_REPLAY_SIZE = 24
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"custom_{score.id}.osr"
-            replay_disk_file.write_bytes(replay_data)
+            key = f"{app.settings.R2_REPLAY_FOLDER}/{score.id}2.osr"
+            await app.storage.upload(app.settings.R2_BUCKET, key, replay_data)
 
     # 更新用户统计 - 完全与官方谱面保持一致
     if score.player.stats is None:
@@ -1503,8 +1504,8 @@ async def osuSubmitModularSelector(
         MIN_REPLAY_SIZE = 24
 
         if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"{score.id}.osr"
-            replay_disk_file.write_bytes(replay_data)
+            key = f"{app.settings.R2_REPLAY_FOLDER}/{score.id}1.osr"
+            await app.storage.upload(app.settings.R2_BUCKET, key, replay_data)
         else:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
@@ -1781,18 +1782,20 @@ async def getReplay(
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
 ) -> Response:
     score = await Score.from_sql(score_id)
-    if not score:
+    if score is not None:
+        key = f"{app.settings.R2_REPLAY_FOLDER}/{score_id}1.osr"
+    else:
+        key = f"{app.settings.R2_REPLAY_FOLDER}/{score_id}2.osr"
+
+    data = await app.storage.download(app.settings.R2_BUCKET, key)
+    if data is None:
         return Response(b"", status_code=404)
 
-    file = REPLAYS_PATH / f"{score_id}.osr"
-    if not file.exists():
-        return Response(b"", status_code=404)
-
-    # increment replay views for this score
-    if score.player is not None and player.id != score.player.id:
+    # increment replay views for this score (official scores only)
+    if score is not None and score.player is not None and player.id != score.player.id:
         app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
 
-    return FileResponse(file)
+    return Response(data, media_type="application/octet-stream")
 
 
 @router.get("/web/osu-rate.php")
